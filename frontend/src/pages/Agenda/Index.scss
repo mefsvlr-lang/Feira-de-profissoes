@@ -124,6 +124,7 @@
             display: flex;
             flex: 1;
             flex-direction: column;
+            align-self: center;
             overflow-x: hidden;
             overflow-y: auto;
             overscroll-behavior: contain;
@@ -131,17 +132,32 @@
             scrollbar-width: thin;
         }
 
+        @supports selector(::-webkit-scrollbar) {
+            .day-summary {
+                scrollbar-color: auto;
+                scrollbar-width: auto;
+            }
+        }
+
         .day-summary::-webkit-scrollbar {
             width: 5px;
+            border-radius: 999px;
+        }
+
+        .day-summary::-webkit-scrollbar-button {
+            display: none;
+            width: 0;
+            height: 0;
+            background: transparent;
         }
 
         .day-summary::-webkit-scrollbar-track {
-            border-radius: 5px;
+            border-radius: 999px;
             background-color: rgba(255, 255, 255, 0.45);
         }
 
         .day-summary::-webkit-scrollbar-thumb {
-            border-radius: 5px;
+            border-radius: 999px;
             background-color: #0b7699;
         }
 

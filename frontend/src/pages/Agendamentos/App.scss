@@ -42,7 +42,6 @@
         display: flex;
         gap: 20px;
         padding: 12px;
-        margin-top: 30px;
     }
 
     .dias {
@@ -127,6 +126,7 @@
         padding-left: 20px;
         box-sizing: border-box;
         user-select: text;
+        
     }
 
     .formulario form button {
@@ -395,17 +395,32 @@
         scrollbar-width: thin;
     }
 
+    @supports selector(::-webkit-scrollbar) {
+        .horario-lista {
+            scrollbar-color: auto;
+            scrollbar-width: auto;
+        }
+    }
+
     .horario-lista::-webkit-scrollbar {
         width: 7px;
+        border-radius: 999px;
+    }
+
+    .horario-lista::-webkit-scrollbar-button {
+        display: none;
+        width: 0;
+        height: 0;
+        background: transparent;
     }
 
     .horario-lista::-webkit-scrollbar-track {
-        border-radius: 20px;
+        border-radius: 999px;
         background-color: #D9D9D9;
     }
 
     .horario-lista::-webkit-scrollbar-thumb {
-        border-radius: 20px;
+        border-radius: 999px;
         background-color: #16B9E8;
     }
 

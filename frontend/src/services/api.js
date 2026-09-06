@@ -34,7 +34,7 @@ async function tratarResposta(response) {
 }
 
 export async function criarAgendamento(dados) {
-  const response = await fetch(`${API_URL}/agendamento`, {
+  const response = await fetch(`${API_URL}/agendamentos`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -46,44 +46,40 @@ export async function criarAgendamento(dados) {
 }
 
 export async function listarAgendamentos({ signal } = {}) {
-  const response = await fetch(`${API_URL}/agenda`, { signal });
+  const response = await fetch(`${API_URL}/agendamentos`, { signal });
 
   return tratarResposta(response);
 }
 
-export async function removerAgendamento({ dia, horario }) {
-  const response = await fetch(`${API_URL}/remover`, {
+export async function removerAgendamento(id) {
+  const response = await fetch(`${API_URL}/agendamentos/${encodeURIComponent(id)}`, {
     method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      dia: String(dia),
-      horario: String(horario),
-    }),
   });
 
   return tratarResposta(response);
 }
 
 export async function editarAgendamento({
-  diaOriginal,
-  horarioOriginal,
+  id,
   titulo,
   dia,
   horario,
+  horario_inicio,
+  horario_fim,
 }) {
-  const response = await fetch(`${API_URL}/editar`, {
+  const horarioInicio = horario_inicio ?? horario;
+  const horarioFim = horario_fim ?? horarioInicio;
+
+  const response = await fetch(`${API_URL}/agendamentos/${encodeURIComponent(id)}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      diaOriginal: String(diaOriginal),
-      horarioOriginal: String(horarioOriginal),
       titulo: String(titulo),
       dia: String(dia),
-      horario: String(horario),
+      horario_inicio: String(horarioInicio),
+      horario_fim: String(horarioFim),
     }),
   });
 

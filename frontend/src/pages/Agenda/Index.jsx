@@ -9,9 +9,34 @@ import {
 } from '../../services/api';
 
 const diasDoMes = Array.from({ length: 30 }, (_, indice) => indice + 1);
+const horarioRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function obterHorarioInicio(agendamento) {
+  return String(
+    agendamento.horario_inicio || agendamento.horario || '',
+  ).trim();
+}
+
+function obterHorarioFim(agendamento) {
+  return String(
+    agendamento.horario_fim ||
+      agendamento.horario_inicio ||
+      agendamento.horario ||
+      '',
+  ).trim();
+}
+
+function obterTextoHorario(agendamento) {
+  const inicio = obterHorarioInicio(agendamento);
+  const fim = obterHorarioFim(agendamento);
+
+  return inicio === fim ? inicio : `${inicio} - ${fim}`;
+}
 
 function ordenarPorHorario(primeiro, segundo) {
-  return String(primeiro.horario).localeCompare(String(segundo.horario));
+  return obterHorarioInicio(primeiro).localeCompare(
+    obterHorarioInicio(segundo),
+  );
 }
 
 export default function Agenda() {
@@ -101,14 +126,17 @@ export default function Agenda() {
   }
 
   function iniciarEdicao(agendamento) {
+    const horarioInicio = obterHorarioInicio(agendamento);
+    const horarioFim = obterHorarioFim(agendamento);
+
     setErroRemocao('');
     setErroEdicao('');
     setEdicao({
-      diaOriginal: String(agendamento.dia),
-      horarioOriginal: String(agendamento.horario).trim(),
+      id: agendamento.id,
       titulo: String(agendamento.titulo),
       dia: String(agendamento.dia),
-      horario: String(agendamento.horario).trim(),
+      horario_inicio: horarioInicio,
+      horario_fim: horarioFim,
     });
   }
 
@@ -126,18 +154,22 @@ export default function Agenda() {
 
     const titulo = edicao.titulo.trim();
     const dia = String(edicao.dia).trim();
-    const horario = String(edicao.horario).trim();
+    const horarioInicio = String(edicao.horario_inicio).trim();
+    const horarioFim = String(edicao.horario_fim).trim();
     const numeroDia = Number(dia);
-    const horarioValido = /^([01]\d|2[0-3]):[0-5]\d$/.test(horario);
+    const horarioInicioValido = horarioRegex.test(horarioInicio);
+    const horarioFimValido = horarioRegex.test(horarioFim);
 
     if (
       !titulo ||
       !Number.isInteger(numeroDia) ||
       numeroDia < 1 ||
       numeroDia > 30 ||
-      !horarioValido
+      !horarioInicioValido ||
+      !horarioFimValido ||
+      horarioFim < horarioInicio
     ) {
-      setErroEdicao('Preencha o texto, o dia e um horário válido.');
+      setErroEdicao('Preencha o texto, o dia e horários válidos.');
       return;
     }
 
@@ -146,18 +178,17 @@ export default function Agenda() {
 
     try {
       const agendamentoAtualizado = await editarAgendamento({
-        diaOriginal: edicao.diaOriginal,
-        horarioOriginal: edicao.horarioOriginal,
+        id: edicao.id,
         titulo,
         dia,
-        horario,
+        horario_inicio: horarioInicio,
+        horario_fim: horarioFim,
       });
 
       setAgendamentos((atuais) =>
         atuais
           .map((agendamento) =>
-            String(agendamento.dia) === edicao.diaOriginal &&
-            String(agendamento.horario).trim() === edicao.horarioOriginal
+            agendamento.id === edicao.id
               ? agendamentoAtualizado
               : agendamento,
           )
@@ -175,26 +206,16 @@ export default function Agenda() {
   }
 
   async function deleteSchedule(agendamento) {
-    const identificador = `${agendamento.dia}-${agendamento.horario}`;
+    const identificador = String(agendamento.id);
     setAgendamentoEmRemocao(identificador);
     setErroRemocao('');
     setErroEdicao('');
 
     try {
-      await removerAgendamento({
-        dia: agendamento.dia,
-        horario: agendamento.horario,
-      });
+      await removerAgendamento(agendamento.id);
 
       setAgendamentos((atuais) =>
-        atuais.filter(
-          (item) =>
-            !(
-              Number(item.dia) === Number(agendamento.dia) &&
-              String(item.horario).trim() ===
-                String(agendamento.horario).trim()
-            ),
-        ),
+        atuais.filter((item) => item.id !== agendamento.id),
       );
     } catch (error) {
       setErroRemocao(
@@ -300,14 +321,18 @@ export default function Agenda() {
                     >
                       <span className="day-number">{dia.numero}</span>
                       <span className="day-summary">
-                        {eventosDoDia.map((agendamento, indice) => (
-                          <span
-                            className="day-event-preview"
-                            key={`${agendamento.horario}-${agendamento.titulo}-${indice}`}
-                          >
-                            {agendamento.horario}
-                          </span>
-                        ))}
+                        {eventosDoDia.map((agendamento, indice) => {
+                          const horarioTexto = obterTextoHorario(agendamento);
+
+                          return (
+                            <span
+                              className="day-event-preview"
+                              key={`${horarioTexto}-${agendamento.titulo}-${indice}`}
+                            >
+                              {horarioTexto}
+                            </span>
+                          );
+                        })}
                       </span>
                     </button>
                   );
@@ -354,13 +379,11 @@ export default function Agenda() {
                 {agendamentosSelecionados.length > 0 ? (
                   <ul className="day-event-list">
                     {agendamentosSelecionados.map((agendamento) => {
-                      const identificador = `${agendamento.dia}-${agendamento.horario}`;
+                      const horarioTexto = obterTextoHorario(agendamento);
+                      const identificador = String(agendamento.id);
                       const estaExcluindo =
                         agendamentoEmRemocao === identificador;
-                      const estaEditando =
-                        edicao?.diaOriginal === String(agendamento.dia) &&
-                        edicao?.horarioOriginal ===
-                          String(agendamento.horario).trim();
+                      const estaEditando = edicao?.id === agendamento.id;
 
                       return (
                         <li
@@ -413,16 +436,32 @@ export default function Agenda() {
                                 </label>
 
                                 <label>
-                                  <span>Horário</span>
+                                  <span>Início</span>
                                   <input
                                     type="time"
                                     step="60"
-                                    value={edicao.horario}
+                                    value={edicao.horario_inicio}
                                     disabled={salvandoEdicao}
                                     onChange={(event) =>
                                       setEdicao((atual) => ({
                                         ...atual,
-                                        horario: event.target.value,
+                                        horario_inicio: event.target.value,
+                                      }))
+                                    }
+                                  />
+                                </label>
+
+                                <label>
+                                  <span>Fim</span>
+                                  <input
+                                    type="time"
+                                    step="60"
+                                    value={edicao.horario_fim}
+                                    disabled={salvandoEdicao}
+                                    onChange={(event) =>
+                                      setEdicao((atual) => ({
+                                        ...atual,
+                                        horario_fim: event.target.value,
                                       }))
                                     }
                                   />
@@ -456,7 +495,7 @@ export default function Agenda() {
                           ) : (
                             <>
                               <div className="day-event-content">
-                                <strong>{agendamento.horario}</strong>
+                                <strong>{horarioTexto}</strong>
                                 <span>{agendamento.titulo}</span>
                               </div>
 
@@ -465,7 +504,7 @@ export default function Agenda() {
                                   className="day-event-edit"
                                   type="button"
                                   title="Editar"
-                                  aria-label={`Editar agendamento das ${agendamento.horario}: ${agendamento.titulo}`}
+                                  aria-label={`Editar agendamento das ${horarioTexto}: ${agendamento.titulo}`}
                                   disabled={
                                     Boolean(agendamentoEmRemocao) ||
                                     salvandoEdicao ||
@@ -485,8 +524,8 @@ export default function Agenda() {
                                   title="Lixeira"
                                   aria-label={
                                     estaExcluindo
-                                      ? `Excluindo agendamento das ${agendamento.horario}`
-                                      : `Excluir agendamento das ${agendamento.horario}: ${agendamento.titulo}`
+                                      ? `Excluindo agendamento das ${horarioTexto}`
+                                      : `Excluir agendamento das ${horarioTexto}: ${agendamento.titulo}`
                                   }
                                   disabled={
                                     Boolean(agendamentoEmRemocao) ||

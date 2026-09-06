@@ -334,6 +334,72 @@
         user-select: none;
     }
 
+    .evento-horarios-campos {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .evento-horarios-campos label {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        color: #FFFFFF;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .evento-horarios-campos input {
+        min-width: 0;
+        height: 30px;
+        padding: 0 4px;
+        border: 0;
+        border-radius: 6px;
+        background-color: #D9D9D9;
+        color: #1F1F1F;
+        font: inherit;
+        font-size: 12px;
+    }
+
+    .evento-horarios-campos input:disabled,
+    .evento-horarios-campos input[aria-disabled='true'] {
+        background-color: #A8A8A8;
+        color: #555555;
+        cursor: not-allowed;
+        opacity: 0.45;
+    }
+
+    .evento-horarios-salvar {
+        width: 100%;
+        height: 30px;
+        margin-top: 8px;
+        border: 0;
+        border-radius: 6px;
+        background-color: #16B9E8;
+        color: #1F1F1F;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+    .evento-horarios-salvar:hover {
+        background-color: #FFFFFF;
+    }
+
+    .evento-horarios-salvar:focus-visible {
+        outline: 3px solid #FFFFFF;
+        outline-offset: 2px;
+    }
+
+    .evento-horarios-salvar:disabled,
+    .evento-horarios-salvar[aria-disabled='true'] {
+        background-color: #A8A8A8;
+        color: #555555;
+        cursor: not-allowed;
+        opacity: 0.45;
+    }
+
     .ajuste-minutos-botoes {
         width: 100%;
         display: grid;
@@ -376,7 +442,8 @@
         outline-offset: 2px;
     }
 
-    .ajuste-minutos-botoes button:disabled {
+    .ajuste-minutos-botoes button:disabled,
+    .ajuste-minutos-botoes button[aria-disabled='true'] {
         background-color: #A8A8A8;
         color: #555555;
         cursor: not-allowed;

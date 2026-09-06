@@ -375,7 +375,7 @@
 
         .day-edit-fields {
             display: grid;
-            grid-template-columns: minmax(90px, 1fr) minmax(140px, 2fr);
+            grid-template-columns: minmax(80px, 1fr) repeat(2, minmax(110px, 1.5fr));
             gap: 10px;
         }
 

@@ -1,46 +1,65 @@
 import './App.scss';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { colunasCalendario } from '../../data/calendario';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { criarAgendamento, listarAgendamentos } from '../../services/api';
+import {
+  BarraNavegacao,
+  Calendario,
+  FormularioAgendamento,
+  Notificacao,
+  OrientacaoAgendamento,
+  PainelHorarios,
+} from './components';
+import {
+  algumAgendamentoConflita,
+  horarioParaMinutos,
+  horarioRegex,
+  horarios,
+  minutosParaHorario,
+  obterHorarioFim,
+  obterHorarioInicio,
+} from './horarioUtils';
 
-const horarios = Array.from(
-  { length: 24 },
-  (_, hora) => `${String(hora).padStart(2, '0')}:00`,
-);
+function obterOrientacaoAgendamento(
+  diaSelecionado,
+  horarioSelecionado,
+  horarioSelecionadoOcupado,
+) {
+  if (diaSelecionado === null) {
+    return {
+      icone: 'fa-regular fa-calendar',
+      titulo: 'Comece escolhendo uma data',
+      texto: 'Depois, selecione o horário desejado na lista ao lado.',
+    };
+  }
 
-function Notificacao({ notificacao, onClose }) {
-  const { id, tipo, texto } = notificacao;
+  if (!horarioSelecionado) {
+    return {
+      icone: 'fa-regular fa-clock',
+      titulo: `Dia ${diaSelecionado} selecionado`,
+      texto: 'Agora escolha um horário para continuar.',
+    };
+  }
 
-  useEffect(() => {
-    const temporizador = window.setTimeout(() => {
-      onClose(id);
-    }, 5000);
+  if (horarioSelecionadoOcupado) {
+    return {
+      icone: 'fa-solid fa-triangle-exclamation',
+      titulo: `${horarioSelecionado} já está ocupado`,
+      texto: 'Ajuste o horário antes de concluir o agendamento.',
+    };
+  }
 
-    return () => window.clearTimeout(temporizador);
-  }, [id, onClose]);
-
-  return (
-    <div
-      className={`notificacao ${tipo}`}
-      role={tipo === 'erro' ? 'alert' : 'status'}
-      aria-atomic="true"
-    >
-      <span>{texto}</span>
-      <button
-        type="button"
-        aria-label="Fechar notificação"
-        onClick={() => onClose(id)}
-      >
-        &times;
-      </button>
-    </div>
-  );
+  return {
+    icone: 'fa-regular fa-circle-check',
+    titulo: `Dia ${diaSelecionado}, às ${horarioSelecionado}`,
+    texto: 'Preencha o título e clique em Enviar para concluir.',
+  };
 }
 
 export default function Agendamentos() {
   const [diaSelecionado, setDiaSelecionado] = useState(null);
   const [horarioSelecionado, setHorarioSelecionado] = useState('');
+  const [eventoInicio, setEventoInicio] = useState('');
+  const [eventoFim, setEventoFim] = useState('');
   const [titulo, setTitulo] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [notificacoes, setNotificacoes] = useState([]);
@@ -95,30 +114,62 @@ export default function Agendamentos() {
     return () => controller.abort();
   }, [adicionarNotificacao, carregarAgendamentos]);
 
-  const horariosOcupados = new Set(
-    agendamentos
-      .filter((agendamento) => Number(agendamento.dia) === diaSelecionado)
-      .map((agendamento) => String(agendamento.horario).trim()),
+  const agendamentosDoDia = useMemo(
+    () =>
+      agendamentos.filter(
+        (agendamento) => Number(agendamento.dia) === diaSelecionado,
+      ),
+    [agendamentos, diaSelecionado],
   );
 
-  const horariosDisponiveis = horarios.filter(
-    (horario) => !horariosOcupados.has(horario),
+  const horariosDisponiveis = useMemo(
+    () =>
+      horarios.filter(
+        (horario) =>
+          !algumAgendamentoConflita(agendamentosDoDia, horario, horario),
+      ),
+    [agendamentosDoDia],
   );
 
   const horarioSelecionadoOcupado =
-    Boolean(horarioSelecionado) && horariosOcupados.has(horarioSelecionado);
+    Boolean(horarioSelecionado) &&
+    algumAgendamentoConflita(
+      agendamentosDoDia,
+      horarioSelecionado,
+      horarioSelecionado,
+    );
+  const estaProcessando = enviando || carregandoAgenda;
+  const eventoBloqueado = diaSelecionado === null || estaProcessando;
+  const orientacaoAgendamento = obterOrientacaoAgendamento(
+    diaSelecionado,
+    horarioSelecionado,
+    horarioSelecionadoOcupado,
+  );
+
+  function avisarDiaObrigatorio() {
+    adicionarNotificacao(
+      'erro',
+      'Selecione uma data antes de escolher um horário.',
+    );
+  }
+
+  function limparSelecao() {
+    setDiaSelecionado(null);
+    setHorarioSelecionado('');
+    setEventoInicio('');
+    setEventoFim('');
+  }
 
   function selecionarDia(dia) {
     setDiaSelecionado(dia);
     setHorarioSelecionado('');
+    setEventoInicio('');
+    setEventoFim('');
   }
 
   function selecionarHorario(hora) {
     if (diaSelecionado === null) {
-      adicionarNotificacao(
-        'erro',
-        'Selecione uma data antes de escolher um horário.',
-      );
+      avisarDiaObrigatorio();
       return;
     }
 
@@ -126,6 +177,11 @@ export default function Agendamentos() {
   }
 
   function alterarMinutos(quantidade) {
+    if (diaSelecionado === null) {
+      avisarDiaObrigatorio();
+      return;
+    }
+
     if (!horarioSelecionado) {
       adicionarNotificacao(
         'erro',
@@ -134,8 +190,7 @@ export default function Agendamentos() {
       return;
     }
 
-    const [hora, minuto] = horarioSelecionado.split(':').map(Number);
-    const totalMinutos = hora * 60 + minuto + quantidade;
+    const totalMinutos = horarioParaMinutos(horarioSelecionado) + quantidade;
 
     if (totalMinutos < 0) {
       adicionarNotificacao(
@@ -153,12 +208,59 @@ export default function Agendamentos() {
       return;
     }
 
-    const novoHorario = `${String(Math.floor(totalMinutos / 60)).padStart(
-      2,
-      '0',
-    )}:${String(totalMinutos % 60).padStart(2, '0')}`;
+    setHorarioSelecionado(minutosParaHorario(totalMinutos));
+  }
 
-    setHorarioSelecionado(novoHorario);
+  function existeConflitoNoDia(inicio, fim) {
+    return algumAgendamentoConflita(agendamentosDoDia, inicio, fim);
+  }
+
+  function criarDadosAgendamento(tituloNormalizado, dia, horario) {
+    return {
+      titulo: tituloNormalizado,
+      dia,
+      horario_inicio: horario,
+      horario_fim: horario,
+    };
+  }
+
+  function criarDadosEvento(tituloNormalizado, dia, inicio, fim) {
+    return {
+      titulo: tituloNormalizado,
+      dia,
+      horario_inicio: inicio,
+      horario_fim: fim,
+    };
+  }
+
+  async function salvarNaAgenda(dados) {
+    const registroCriado = await criarAgendamento(dados);
+    setAgendamentos((atuais) => [...atuais, registroCriado]);
+  }
+
+  function registrarHorarioConflitante(dia, horario) {
+    setAgendamentos((atuais) => {
+      const horarioJaRegistrado = atuais.some(
+        (agendamento) =>
+          Number(agendamento.dia) === Number(dia) &&
+          obterHorarioInicio(agendamento) === horario &&
+          obterHorarioFim(agendamento) === horario,
+      );
+
+      if (horarioJaRegistrado) {
+        return atuais;
+      }
+
+      return [
+        ...atuais,
+        {
+          titulo: '',
+          dia,
+          horario_inicio: horario,
+          horario_fim: horario,
+        },
+      ];
+    });
   }
 
   async function enviarAgendamento(event) {
@@ -168,7 +270,7 @@ export default function Agendamentos() {
     const diaAgendado = String(diaSelecionado);
     const horarioAgendado = horarioSelecionado;
 
-    if (!tituloNormalizado || diaSelecionado === null || !horarioSelecionado) {
+    if (!tituloNormalizado || diaSelecionado === null || !horarioAgendado) {
       adicionarNotificacao(
         'erro',
         'Preencha o título e selecione um dia e um horário.',
@@ -176,7 +278,7 @@ export default function Agendamentos() {
       return;
     }
 
-    if (horariosOcupados.has(horarioAgendado)) {
+    if (existeConflitoNoDia(horarioAgendado, horarioAgendado)) {
       adicionarNotificacao(
         'erro',
         `O horário ${horarioAgendado} já está agendado para este dia.`,
@@ -187,38 +289,19 @@ export default function Agendamentos() {
     setEnviando(true);
 
     try {
-      const agendamentoCriado = await criarAgendamento({
-        titulo: tituloNormalizado,
-        dia: diaAgendado,
-        horario: horarioAgendado,
-      });
+      await salvarNaAgenda(
+        criarDadosAgendamento(tituloNormalizado, diaAgendado, horarioAgendado),
+      );
 
-      setAgendamentos((atuais) => [...atuais, agendamentoCriado]);
       setTitulo('');
-      setDiaSelecionado(null);
-      setHorarioSelecionado('');
+      limparSelecao();
       adicionarNotificacao(
         'sucesso',
         `Agendamento salvo para o dia ${diaAgendado}, às ${horarioAgendado}.`,
       );
     } catch (error) {
       if (error.status === 409) {
-        setAgendamentos((atuais) => {
-          const horarioJaRegistrado = atuais.some(
-            (agendamento) =>
-              Number(agendamento.dia) === Number(diaAgendado) &&
-              String(agendamento.horario).trim() === horarioAgendado,
-          );
-
-          if (horarioJaRegistrado) {
-            return atuais;
-          }
-
-          return [
-            ...atuais,
-            { titulo: '', dia: diaAgendado, horario: horarioAgendado },
-          ];
-        });
+        registrarHorarioConflitante(diaAgendado, horarioAgendado);
         setHorarioSelecionado('');
       }
 
@@ -231,32 +314,65 @@ export default function Agendamentos() {
     }
   }
 
-  let orientacaoAgendamento = {
-    icone: 'fa-regular fa-calendar',
-    titulo: 'Comece escolhendo uma data',
-    texto: 'Depois, selecione o horário desejado na lista ao lado.',
-  };
+  async function enviarEvento() {
+    const tituloNormalizado = titulo.trim();
+    const diaAgendado = String(diaSelecionado);
+    const inicio = eventoInicio.trim();
+    const fim = eventoFim.trim();
 
-  if (diaSelecionado !== null && !horarioSelecionado) {
-    orientacaoAgendamento = {
-      icone: 'fa-regular fa-clock',
-      titulo: `Dia ${diaSelecionado} selecionado`,
-      texto: 'Agora escolha um horário para continuar.',
-    };
-  }
+    if (diaSelecionado === null) {
+      avisarDiaObrigatorio();
+      return;
+    }
 
-  if (diaSelecionado !== null && horarioSelecionado) {
-    orientacaoAgendamento = horarioSelecionadoOcupado
-      ? {
-          icone: 'fa-solid fa-triangle-exclamation',
-          titulo: `${horarioSelecionado} já está ocupado`,
-          texto: 'Ajuste o horário antes de concluir o agendamento.',
-        }
-      : {
-          icone: 'fa-regular fa-circle-check',
-          titulo: `Dia ${diaSelecionado}, às ${horarioSelecionado}`,
-          texto: 'Preencha o título e clique em Enviar para concluir.',
-        };
+    if (!tituloNormalizado || !inicio || !fim) {
+      adicionarNotificacao(
+        'erro',
+        'Preencha o título, selecione um dia e informe o início e fim do evento.',
+      );
+      return;
+    }
+
+    if (!horarioRegex.test(inicio) || !horarioRegex.test(fim)) {
+      adicionarNotificacao('erro', 'Informe horários válidos para o evento.');
+      return;
+    }
+
+    if (horarioParaMinutos(fim) < horarioParaMinutos(inicio)) {
+      adicionarNotificacao(
+        'erro',
+        'O horário final não pode ser antes do horário inicial.',
+      );
+      return;
+    }
+
+    if (existeConflitoNoDia(inicio, fim)) {
+      adicionarNotificacao(
+        'erro',
+        'Esse evento conflita com outro horário já agendado para este dia.',
+      );
+      return;
+    }
+
+    setEnviando(true);
+
+    try {
+      await salvarNaAgenda(criarDadosEvento(tituloNormalizado, diaAgendado, inicio, fim));
+
+      setTitulo('');
+      limparSelecao();
+      adicionarNotificacao(
+        'sucesso',
+        `Evento salvo para o dia ${diaAgendado}, das ${inicio} até ${fim}.`,
+      );
+    } catch (error) {
+      adicionarNotificacao(
+        'erro',
+        error.message || 'Não foi possível salvar o evento.',
+      );
+    } finally {
+      setEnviando(false);
+    }
   }
 
   return (
@@ -273,166 +389,45 @@ export default function Agendamentos() {
         </div>
       )}
 
-      <nav>
-        <Link className="botao-agenda" to="/agenda">
-          Ver agenda
-        </Link>
-        <img src="/assets/images/Agenda-FREI.png" alt="Logo Agenda do FREI" />
-        <Link className="botao-agendamentos" to="/">
-          Ver agendamento
-        </Link>
-      </nav>
+      <BarraNavegacao />
 
       <main>
         <div className="calendario">
           <div className="dias">
-            <div className="botoes">
-              {colunasCalendario.map((coluna, indiceColuna) => (
-                <div className={`coluna${indiceColuna + 1}`} key={coluna.nome}>
-                  <p>{coluna.nome}</p>
+            <Calendario
+              diaSelecionado={diaSelecionado}
+              enviando={enviando}
+              onSelecionarDia={selecionarDia}
+            />
 
-                  {coluna.dias.map((dia, indiceDia) =>
-                    dia.ativo ? (
-                      <button
-                        className={`date-ative${
-                          diaSelecionado === dia.numero ? ' date-select' : ''
-                        }`}
-                        type="button"
-                        key={`${coluna.nome}-${indiceDia}`}
-                        aria-label={`Selecionar dia ${dia.numero} de setembro`}
-                        aria-pressed={diaSelecionado === dia.numero}
-                        disabled={enviando}
-                        onClick={() => selecionarDia(dia.numero)}
-                      >
-                        <span>{dia.numero}</span>
-                      </button>
-                    ) : (
-                      <div
-                        className="date-inative"
-                        key={`${coluna.nome}-${indiceDia}`}
-                        aria-hidden="true"
-                      >
-                        <span>{dia.numero}</span>
-                      </div>
-                    ),
-                  )}
-                </div>
-              ))}
-            </div>
+            <OrientacaoAgendamento orientacao={orientacaoAgendamento} />
 
-            <div className="orientacao-agendamento" aria-live="polite">
-              <i className={orientacaoAgendamento.icone} aria-hidden="true" />
-              <div>
-                <strong>{orientacaoAgendamento.titulo}</strong>
-                <span>{orientacaoAgendamento.texto}</span>
-              </div>
-            </div>
-
-            <div className="formulario">
-              <form onSubmit={enviarAgendamento} noValidate>
-                <label htmlFor="titulo">Título:</label>
-                <input
-                  id="titulo"
-                  type="text"
-                  maxLength="120"
-                  value={titulo}
-                  disabled={enviando}
-                  onChange={(event) => {
-                    setTitulo(event.target.value);
-                  }}
-                  required
-                />
-                <button type="submit" disabled={enviando || carregandoAgenda}>
-                  {enviando ? 'Enviando...' : 'Enviar'}
-                </button>
-              </form>
-            </div>
+            <FormularioAgendamento
+              titulo={titulo}
+              enviando={enviando}
+              carregandoAgenda={carregandoAgenda}
+              onTitulo={setTitulo}
+              onSubmit={enviarAgendamento}
+            />
           </div>
 
-          <div className="horario">
-            <p className="horario-data">
-              {diaSelecionado !== null
-                ? `Dia: ${diaSelecionado} de setembro${
-                    horarioSelecionado ? `, às ${horarioSelecionado}` : ''
-                  }`
-                : 'Dia:'}
-            </p>
-
-            <div className="ajuste-minutos">
-              <p>Ajustar minutos</p>
-              <div className="ajuste-minutos-botoes">
-                {[-1, -10, -30].map((quantidade) => (
-                  <button
-                    type="button"
-                    key={quantidade}
-                    aria-label={`Diminuir ${Math.abs(quantidade)} minuto${
-                      quantidade < -1 ? 's' : ''
-                    } do horário`}
-                    disabled={
-                      !horarioSelecionado || enviando || carregandoAgenda
-                    }
-                    onClick={() => alterarMinutos(quantidade)}
-                  >
-                    {quantidade}
-                  </button>
-                ))}
-
-                <output
-                  className={`horario-ajustado${
-                    horarioSelecionadoOcupado ? ' horario-ocupado' : ''
-                  }`}
-                  aria-label="Horário selecionado"
-                  aria-live="polite"
-                  title={
-                    horarioSelecionadoOcupado
-                      ? 'Este horário já está ocupado'
-                      : undefined
-                  }
-                >
-                  {horarioSelecionado || '--:--'}
-                </output>
-
-                {[1, 10, 30].map((quantidade) => (
-                  <button
-                    type="button"
-                    key={quantidade}
-                    aria-label={`Adicionar ${quantidade} minuto${
-                      quantidade > 1 ? 's' : ''
-                    } ao horário`}
-                    disabled={
-                      !horarioSelecionado || enviando || carregandoAgenda
-                    }
-                    onClick={() => alterarMinutos(quantidade)}
-                  >
-                    +{quantidade}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="horario-lista">
-              {horariosDisponiveis.map((hora) => (
-                <button
-                  className={`horario-item${
-                    diaSelecionado === null ? ' horario-bloqueado' : ''
-                  }`}
-                  type="button"
-                  key={hora}
-                  aria-pressed={
-                    Boolean(horarioSelecionado) &&
-                    horarioSelecionado.slice(0, 2) === hora.slice(0, 2)
-                  }
-                  aria-disabled={
-                    diaSelecionado === null || enviando || carregandoAgenda
-                  }
-                  disabled={enviando || carregandoAgenda}
-                  onClick={() => selecionarHorario(hora)}
-                >
-                  {hora}
-                </button>
-              ))}
-            </div>
-          </div>
+          <PainelHorarios
+            diaSelecionado={diaSelecionado}
+            horarioSelecionado={horarioSelecionado}
+            horarioSelecionadoOcupado={horarioSelecionadoOcupado}
+            horariosDisponiveis={horariosDisponiveis}
+            eventoInicio={eventoInicio}
+            eventoFim={eventoFim}
+            eventoBloqueado={eventoBloqueado}
+            enviando={enviando}
+            carregandoAgenda={carregandoAgenda}
+            onAlterarMinutos={alterarMinutos}
+            onEventoBloqueado={avisarDiaObrigatorio}
+            onEventoInicio={setEventoInicio}
+            onEventoFim={setEventoFim}
+            onSalvarEvento={enviarEvento}
+            onSelecionarHorario={selecionarHorario}
+          />
         </div>
       </main>
     </div>

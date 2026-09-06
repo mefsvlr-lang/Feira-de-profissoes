@@ -1,49 +1,37 @@
-import { Router } from "express";
-import agendamentos from '../agendamentos.js';
+import { Router } from 'express';
+import {
+    BloqueioDeAgendaError,
+    ConflitoDeHorarioError,
+    criarAgendamento
+} from '../agendamentos.js';
+import { normalizarAgendamento } from '../agendamentoValidation.js';
 
 const endpoints = Router();
 
-endpoints.post('/agendamento', (req, res) => {
-    const dados = req.body;
-    const camposPermitidos = ['titulo', 'dia', 'horario'];
+endpoints.post('/agendamentos', async (req, res, next) => {
+    const agendamento = normalizarAgendamento(req.body);
 
-    if (!dados || typeof dados !== 'object' || Array.isArray(dados)) {
-        return res.status(400).json({ erro: 'O corpo da requisição deve ser um objeto JSON.' });
-    }
-
-    const camposRecebidos = Object.keys(dados);
-    const possuiSomenteCamposPermitidos = camposRecebidos.every((campo) =>
-        camposPermitidos.includes(campo)
-    );
-    const possuiTodosOsCampos = camposPermitidos.every((campo) =>
-        typeof dados[campo] === 'string' && dados[campo].trim() !== ''
-    );
-
-    if (!possuiSomenteCamposPermitidos || !possuiTodosOsCampos) {
+    if (!agendamento) {
         return res.status(400).json({
-            erro: 'Informe somente titulo, dia e horario, todos preenchidos.'
+            erro: 'Informe somente título, dia, horario_inicio e horario_fim, todos válidos.'
         });
     }
 
-    const agendamento = {
-        titulo: dados.titulo.trim(),
-        dia: dados.dia.trim(),
-        horario: dados.horario.trim()
-    };
+    try {
+        const registroCriado = await criarAgendamento(agendamento);
 
-    const horarioJaAgendado = agendamentos.some((registro) =>
-        registro.dia === agendamento.dia && registro.horario === agendamento.horario
-    );
+        return res.status(201).json(registroCriado);
+    } catch (error) {
+        if (error instanceof ConflitoDeHorarioError) {
+            return res.status(409).json({ erro: error.message });
+        }
 
-    if (horarioJaAgendado) {
-        return res.status(409).json({
-            erro: 'Este horário já está agendado para este dia.'
-        });
+        if (error instanceof BloqueioDeAgendaError) {
+            return res.status(503).json({ erro: error.message });
+        }
+
+        return next(error);
     }
-
-    agendamentos.push(agendamento);
-
-    return res.status(201).json(agendamento);
 });
 
 export default endpoints;

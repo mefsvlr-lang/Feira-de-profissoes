@@ -1,123 +1,81 @@
-import { Router } from "express";
-import agendamentos from '../agendamentos.js';
+import { Router } from 'express';
+import {
+    atualizarAgendamento,
+    BloqueioDeAgendaError,
+    ConflitoDeHorarioError,
+    listarAgendamentos,
+    removerAgendamento
+} from '../agendamentos.js';
+import {
+    normalizarAgendamento,
+    normalizarId
+} from '../agendamentoValidation.js';
 
 const endpoints = Router();
 
-endpoints.get('/agenda', (req, res) => {
-    return res.status(200).json(agendamentos);
+endpoints.get('/agendamentos', async (req, res, next) => {
+    try {
+        const agendamentos = await listarAgendamentos();
+
+        return res.status(200).json(agendamentos);
+    } catch (error) {
+        return next(error);
+    }
 });
 
-endpoints.delete('/remover', (req, res) => {
-    const dados = req.body;
+endpoints.put('/agendamentos/:id', async (req, res, next) => {
+    const id = normalizarId(req.params.id);
+    const agendamento = normalizarAgendamento(req.body);
 
-    if (
-        !dados ||
-        typeof dados !== 'object' ||
-        Array.isArray(dados) ||
-        typeof dados.dia !== 'string' ||
-        typeof dados.horario !== 'string' ||
-        dados.dia.trim() === '' ||
-        dados.horario.trim() === ''
-    ) {
+    if (!id || !agendamento) {
         return res.status(400).json({
-            erro: 'Informe dia e horario para remover o agendamento.'
+            erro: 'Informe um ID e os dados completos e válidos do agendamento.'
         });
     }
 
-    const dia = dados.dia.trim();
-    const horario = dados.horario.trim();
-    const indice = agendamentos.findIndex((agendamento) =>
-        agendamento.dia === dia && agendamento.horario === horario
-    );
+    try {
+        const registroAtualizado = await atualizarAgendamento(id, agendamento);
 
-    if (indice === -1) {
-        return res.status(404).json({
-            erro: 'Agendamento não encontrado.'
-        });
+        if (!registroAtualizado) {
+            return res.status(404).json({ erro: 'Agendamento não encontrado.' });
+        }
+
+        return res.status(200).json(registroAtualizado);
+    } catch (error) {
+        if (error instanceof ConflitoDeHorarioError) {
+            return res.status(409).json({ erro: error.message });
+        }
+
+        if (error instanceof BloqueioDeAgendaError) {
+            return res.status(503).json({ erro: error.message });
+        }
+
+        return next(error);
     }
-
-    const [agendamentoRemovido] = agendamentos.splice(indice, 1);
-
-    return res.status(200).json(agendamentoRemovido);
 });
 
-endpoints.put('/editar', (req, res) => {
-    const dados = req.body;
-    const camposPermitidos = [
-        'diaOriginal',
-        'horarioOriginal',
-        'titulo',
-        'dia',
-        'horario'
-    ];
+endpoints.delete('/agendamentos/:id', async (req, res, next) => {
+    const id = normalizarId(req.params.id);
 
-    if (!dados || typeof dados !== 'object' || Array.isArray(dados)) {
-        return res.status(400).json({
-            erro: 'O corpo da requisição deve ser um objeto JSON.'
-        });
+    if (!id) {
+        return res.status(400).json({ erro: 'Informe um ID válido.' });
     }
 
-    const camposRecebidos = Object.keys(dados);
-    const possuiSomenteCamposPermitidos = camposRecebidos.every((campo) =>
-        camposPermitidos.includes(campo)
-    );
-    const possuiTodosOsCampos = camposPermitidos.every((campo) =>
-        typeof dados[campo] === 'string' && dados[campo].trim() !== ''
-    );
+    try {
+        const removido = await removerAgendamento(id);
 
-    if (!possuiSomenteCamposPermitidos || !possuiTodosOsCampos) {
-        return res.status(400).json({
-            erro: 'Informe o agendamento original e os novos dados completos.'
-        });
+        if (!removido) {
+            return res.status(404).json({ erro: 'Agendamento não encontrado.' });
+        }
+
+        return res.status(204).send();
+    } catch (error) {
+        if (error instanceof BloqueioDeAgendaError) {
+            return res.status(503).json({ erro: error.message });
+        }
+
+        return next(error);
     }
-
-    const diaOriginal = dados.diaOriginal.trim();
-    const horarioOriginal = dados.horarioOriginal.trim();
-    const titulo = dados.titulo.trim();
-    const dia = dados.dia.trim();
-    const horario = dados.horario.trim();
-    const numeroDia = Number(dia);
-    const horarioValido = /^([01]\d|2[0-3]):[0-5]\d$/.test(horario);
-
-    if (
-        titulo.length > 120 ||
-        !Number.isInteger(numeroDia) ||
-        numeroDia < 1 ||
-        numeroDia > 30 ||
-        !horarioValido
-    ) {
-        return res.status(400).json({
-            erro: 'Informe um título de até 120 caracteres, um dia de 1 a 30 e um horário válido.'
-        });
-    }
-
-    const indice = agendamentos.findIndex((agendamento) =>
-        agendamento.dia === diaOriginal &&
-        agendamento.horario === horarioOriginal
-    );
-
-    if (indice === -1) {
-        return res.status(404).json({
-            erro: 'Agendamento não encontrado.'
-        });
-    }
-
-    const horarioJaAgendado = agendamentos.some((agendamento, indiceAtual) =>
-        indiceAtual !== indice &&
-        agendamento.dia === dia &&
-        agendamento.horario === horario
-    );
-
-    if (horarioJaAgendado) {
-        return res.status(409).json({
-            erro: 'Este horário já está agendado para este dia.'
-        });
-    }
-
-    const agendamentoAtualizado = { titulo, dia, horario };
-    agendamentos[indice] = agendamentoAtualizado;
-
-    return res.status(200).json(agendamentoAtualizado);
 });
 
 export default endpoints;

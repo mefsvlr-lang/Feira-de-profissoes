@@ -102,6 +102,7 @@ export function FormularioAgendamento({
   titulo,
   enviando,
   carregandoAgenda,
+  tipoRegistro,
   onTitulo,
   onSubmit,
 }) {
@@ -119,7 +120,9 @@ export function FormularioAgendamento({
           required
         />
         <button type="submit" disabled={enviando || carregandoAgenda}>
-          {enviando ? 'Enviando...' : 'Enviar'}
+          {enviando
+            ? `Adicionando ${tipoRegistro}...`
+            : `Adicionar ${tipoRegistro}`}
         </button>
       </form>
     </div>
@@ -212,6 +215,7 @@ function CampoHorarioEvento({
   enviando,
   carregandoAgenda,
   onClick,
+  onFocus,
   onChange,
 }) {
   return (
@@ -225,6 +229,7 @@ function CampoHorarioEvento({
         readOnly={bloqueado}
         disabled={enviando || carregandoAgenda}
         onClick={onClick}
+        onFocus={onFocus}
         onChange={(event) => onChange(event.target.value)}
       />
     </label>
@@ -240,7 +245,7 @@ function EventoHorarios({
   onCampoBloqueado,
   onInicio,
   onFim,
-  onSalvar,
+  onSelecionarEvento,
 }) {
   function mudarInicio(valor) {
     if (bloqueado) {
@@ -248,6 +253,7 @@ function EventoHorarios({
       return;
     }
 
+    onSelecionarEvento();
     onInicio(valor);
   }
 
@@ -257,6 +263,7 @@ function EventoHorarios({
       return;
     }
 
+    onSelecionarEvento();
     onFim(valor);
   }
 
@@ -272,6 +279,7 @@ function EventoHorarios({
           enviando={enviando}
           carregandoAgenda={carregandoAgenda}
           onClick={bloqueado ? onCampoBloqueado : undefined}
+          onFocus={bloqueado ? undefined : onSelecionarEvento}
           onChange={mudarInicio}
         />
 
@@ -282,19 +290,11 @@ function EventoHorarios({
           enviando={enviando}
           carregandoAgenda={carregandoAgenda}
           onClick={bloqueado ? onCampoBloqueado : undefined}
+          onFocus={bloqueado ? undefined : onSelecionarEvento}
           onChange={mudarFim}
         />
       </div>
 
-      <button
-        className="evento-horarios-salvar"
-        type="button"
-        aria-disabled={bloqueado}
-        disabled={enviando || carregandoAgenda}
-        onClick={onSalvar}
-      >
-        Salvar evento
-      </button>
     </div>
   );
 }
@@ -345,7 +345,7 @@ export function PainelHorarios({
   onEventoBloqueado,
   onEventoInicio,
   onEventoFim,
-  onSalvarEvento,
+  onSelecionarEvento,
   onSelecionarHorario,
 }) {
   return (
@@ -375,7 +375,7 @@ export function PainelHorarios({
         onCampoBloqueado={onEventoBloqueado}
         onInicio={onEventoInicio}
         onFim={onEventoFim}
-        onSalvar={onSalvarEvento}
+        onSelecionarEvento={onSelecionarEvento}
       />
 
       <ListaHorarios

@@ -369,37 +369,6 @@
         opacity: 0.45;
     }
 
-    .evento-horarios-salvar {
-        width: 100%;
-        height: 30px;
-        margin-top: 8px;
-        border: 0;
-        border-radius: 6px;
-        background-color: #16B9E8;
-        color: #1F1F1F;
-        font: inherit;
-        font-size: 12px;
-        font-weight: 700;
-        cursor: pointer;
-    }
-
-    .evento-horarios-salvar:hover {
-        background-color: #FFFFFF;
-    }
-
-    .evento-horarios-salvar:focus-visible {
-        outline: 3px solid #FFFFFF;
-        outline-offset: 2px;
-    }
-
-    .evento-horarios-salvar:disabled,
-    .evento-horarios-salvar[aria-disabled='true'] {
-        background-color: #A8A8A8;
-        color: #555555;
-        cursor: not-allowed;
-        opacity: 0.45;
-    }
-
     .ajuste-minutos-botoes {
         width: 100%;
         display: grid;

@@ -23,12 +23,31 @@ function obterOrientacaoAgendamento(
   diaSelecionado,
   horarioSelecionado,
   horarioSelecionadoOcupado,
+  tipoRegistro,
+  eventoInicio,
+  eventoFim,
 ) {
   if (diaSelecionado === null) {
     return {
       icone: 'fa-regular fa-calendar',
       titulo: 'Comece escolhendo uma data',
       texto: 'Depois, selecione o horário desejado na lista ao lado.',
+    };
+  }
+
+  if (tipoRegistro === 'evento') {
+    if (!eventoInicio || !eventoFim) {
+      return {
+        icone: 'fa-regular fa-clock',
+        titulo: `Evento no dia ${diaSelecionado}`,
+        texto: 'Informe os horários de início e fim do evento.',
+      };
+    }
+
+    return {
+      icone: 'fa-regular fa-circle-check',
+      titulo: `Evento no dia ${diaSelecionado}, das ${eventoInicio} às ${eventoFim}`,
+      texto: 'Preencha o título e clique em Adicionar evento para concluir.',
     };
   }
 
@@ -51,7 +70,8 @@ function obterOrientacaoAgendamento(
   return {
     icone: 'fa-regular fa-circle-check',
     titulo: `Dia ${diaSelecionado}, às ${horarioSelecionado}`,
-    texto: 'Preencha o título e clique em Enviar para concluir.',
+    texto:
+      'Preencha o título e clique em Adicionar agendamento para concluir.',
   };
 }
 
@@ -60,6 +80,7 @@ export default function Agendamentos() {
   const [horarioSelecionado, setHorarioSelecionado] = useState('');
   const [eventoInicio, setEventoInicio] = useState('');
   const [eventoFim, setEventoFim] = useState('');
+  const [tipoRegistro, setTipoRegistro] = useState('agendamento');
   const [titulo, setTitulo] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [notificacoes, setNotificacoes] = useState([]);
@@ -144,6 +165,9 @@ export default function Agendamentos() {
     diaSelecionado,
     horarioSelecionado,
     horarioSelecionadoOcupado,
+    tipoRegistro,
+    eventoInicio,
+    eventoFim,
   );
 
   function avisarDiaObrigatorio() {
@@ -158,6 +182,7 @@ export default function Agendamentos() {
     setHorarioSelecionado('');
     setEventoInicio('');
     setEventoFim('');
+    setTipoRegistro('agendamento');
   }
 
   function selecionarDia(dia) {
@@ -165,6 +190,7 @@ export default function Agendamentos() {
     setHorarioSelecionado('');
     setEventoInicio('');
     setEventoFim('');
+    setTipoRegistro('agendamento');
   }
 
   function selecionarHorario(hora) {
@@ -173,7 +199,19 @@ export default function Agendamentos() {
       return;
     }
 
+    setTipoRegistro('agendamento');
+    setEventoInicio('');
+    setEventoFim('');
     setHorarioSelecionado(hora);
+  }
+
+  function selecionarEvento() {
+    if (diaSelecionado === null) {
+      return;
+    }
+
+    setTipoRegistro('evento');
+    setHorarioSelecionado('');
   }
 
   function alterarMinutos(quantidade) {
@@ -263,9 +301,7 @@ export default function Agendamentos() {
     });
   }
 
-  async function enviarAgendamento(event) {
-    event.preventDefault();
-
+  async function enviarAgendamento() {
     const tituloNormalizado = titulo.trim();
     const diaAgendado = String(diaSelecionado);
     const horarioAgendado = horarioSelecionado;
@@ -375,6 +411,16 @@ export default function Agendamentos() {
     }
   }
 
+  function enviarRegistro(event) {
+    event.preventDefault();
+
+    if (tipoRegistro === 'evento') {
+      return enviarEvento();
+    }
+
+    return enviarAgendamento();
+  }
+
   return (
     <div className="Agendamento">
       {notificacoes.length > 0 && (
@@ -406,8 +452,9 @@ export default function Agendamentos() {
               titulo={titulo}
               enviando={enviando}
               carregandoAgenda={carregandoAgenda}
+              tipoRegistro={tipoRegistro}
               onTitulo={setTitulo}
-              onSubmit={enviarAgendamento}
+              onSubmit={enviarRegistro}
             />
           </div>
 
@@ -425,7 +472,7 @@ export default function Agendamentos() {
             onEventoBloqueado={avisarDiaObrigatorio}
             onEventoInicio={setEventoInicio}
             onEventoFim={setEventoFim}
-            onSalvarEvento={enviarEvento}
+            onSelecionarEvento={selecionarEvento}
             onSelecionarHorario={selecionarHorario}
           />
         </div>
